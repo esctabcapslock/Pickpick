@@ -95,6 +95,7 @@ impl Servertime {
         
         match self.offset {
             Some((s,e)) => {
+                // println!("{} {}-> {}", s, myreqtimerange.0, s.max(myreqtimerange.0));
                 self.offset = Some((
                     s.max(myreqtimerange.0),
                     e.min(myreqtimerange.1)
@@ -266,6 +267,36 @@ impl ServertimeWait{
             return Ok(());
         }
         return Err(())
+    }
+
+    pub fn get_offset_mean(&self) -> (i64,f32){
+        // unsafe{
+            if let Some(Servertime { offset, ..}) = &self.servertime{
+                match offset {
+                    Some(offset) => {
+                        println!("offset:{:?}",offset);
+                        return ((offset.0+offset.1)/2, ((offset.1 - offset.0)as f32)/2.) //.abs()
+                    },
+                    None => return (0,-1.)
+                }
+                
+            }else{
+                return (0,-1.);
+            }
+        // }
+    }
+    pub fn get_host(&self) -> String{
+        if let Some((a,b)) = &self.addr {
+            return b.clone();
+        }
+
+        else if let Some(sev) = &self.servertime{
+            return sev.host.clone();
+        }
+
+        else{
+            return String::from("_");
+        } 
     }
 
     // pub fn cal(&mut self) {

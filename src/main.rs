@@ -3,48 +3,70 @@
 use iced::{
     alignment, button, scrollable, slider, text_input, Button, Checkbox, Color,
     Column, Container, ContentFit, Element, Length, Radio, Row, Sandbox,
-    Scrollable, Settings, Slider, Space, Text, TextInput, Toggler,
+    Scrollable, Settings, Slider, Space, Text, TextInput, Toggler,canvas::{self, Program},
+    Application, executor, Command, time, Subscription, Rectangle,
 };
 
-use pickpick::{Servertime,ServertimeWait};
+// use iced::Canvas;
+use pickpick::{ServertimeWait};
+
+use clock::Clock;
 
 
 pub fn main() -> iced::Result {
-    println!("j");
+    // println!("j");
     let mut setting = Settings::default();
     setting.window.always_on_top = true;
     setting.window.size = (300,300); //width and height
+    setting.window.resizable = false;
     Tour::run(setting)
 }
 
 pub struct Tour {
     steps: Steps,
     scroll: scrollable::State,
-    back_button: button::State,
-    next_button: button::State,
+    // back_button: button::State,
+    // next_button: button::State,
     debug: bool,
     servertime:ServertimeWait,
 }
 
-impl Sandbox for Tour {
-    type Message = Message;
+// impl Tour {
+//     fn setoffset(&self){
+//         let k = self.servertime.get_offset_mean();
+//     }
+// }
 
-    fn new() -> Tour {
-        Tour {
+impl Application for Tour {
+    type Message = Message;
+    type Executor = executor::Default;
+    type Flags = ();
+
+
+    // fn cview(&mut self) -> Element<Message> {
+    //     canvas::Canvas::new(&mut self.state)
+    //         .width(Length::Fill)
+    //         .height(Length::Fill)
+    //         .into()
+    // }
+
+    fn new(_flags: Self::Flags) -> (Tour,Command<Message>) {
+        (Tour {
             steps: Steps::new(),
             scroll: scrollable::State::new(),
-            back_button: button::State::new(),
-            next_button: button::State::new(),
+            // back_button: button::State::new(),
+            // next_button: button::State::new(),
             debug: false,
             servertime: ServertimeWait::new(),
-        }
+        },            
+        Command::none())
     }
 
     fn title(&self) -> String {
         format!("{} - Iced", self.steps.title())
     }
 
-    fn update(&mut self, event: Message) {
+    fn update(&mut self, event: Message) -> Command<Message>{
         match event {
             Message::BackPressed => {
                 self.steps.go_back();
@@ -56,9 +78,23 @@ impl Sandbox for Tour {
                 match step_msg {
                     StepMessage::Calculate =>{
                         self.steps.advance();
-                        match self.servertime.set_server() {
+                        // self.view();
+                        // self.update(Message::NextPressed);
+                        let setserver_res =  self.servertime.set_server();
+                        
+                        match setserver_res {
                             Ok(_) => {
                                 println!("[GUI] set_server ok");
+                                let (offset, offsetrange) = self.servertime.get_offset_mean();
+                                let (ch_of, ch_of_range) = (offset, offsetrange);
+                                let ch_host = self.servertime.get_host();
+                                if let Step::Clock { state, offset, offsetrange, host } =  &mut self.steps.steps[self.steps.current] {
+                                    *offset = ch_of;
+                                    *offsetrange = ch_of_range;
+                                    state.loading = false;
+                                    state.offset = ch_of;
+                                    *host = ch_host;
+                                }
                                 
                             }
                             Err(_) => {
@@ -105,16 +141,25 @@ impl Sandbox for Tour {
                     _ => {}
                 }   
                 self.steps.update(step_msg, &mut self.debug);
+            },
+            Message::Tick=>{
+                if let Step::Clock { .. } = self.steps.steps[self.steps.current] {
+                    //self.steps.update(StepMessage::TimerTic, &mut self.debug)
+                    self.view();
+                }
             }
         }
+        return Command::none()
     }
+
+    
 
     fn view(&mut self) -> Element<Message> {
         let Tour {
             steps,
             scroll,
-            back_button,
-            next_button,
+            // back_button,
+            // next_button,
             ..
         } = self;
 
@@ -162,6 +207,12 @@ impl Sandbox for Tour {
             .center_y()
             .into()
     }
+
+    fn subscription(&self) -> Subscription<Message> {
+        time::every(std::time::Duration::from_millis(50))
+            .map(|instant| Message::Tick)
+    }
+
 }
 
 #[derive(Debug, Clone)]
@@ -169,6 +220,7 @@ pub enum Message {
     BackPressed,
     NextPressed,
     StepMessage(StepMessage),
+    Tick,
     // Calculate,
 }
 
@@ -179,6 +231,7 @@ struct Steps {
 
 impl Steps {
     fn new() -> Steps {
+        // let k = 
         Steps {
             steps: vec![
                 Step::SetupAddr{
@@ -187,40 +240,50 @@ impl Steps {
                     error:None,
                     state_btn_calculate: button::State::new(),
                 },
-                Step::Welcome,
-                // Setp::iteminfo
-                Step::Slider {
-                    state: slider::State::new(),
-                    value: 50,
-                },
-                Step::RowsAndColumns {
-                    layout: Layout::Row,
-                    spacing_slider: slider::State::new(),
-                    spacing: 20,
-                },
-                Step::Text {
-                    size_slider: slider::State::new(),
-                    size: 30,
-                    color_sliders: [slider::State::new(); 3],
-                    color: Color::BLACK,
-                },
-                Step::Radio { selection: None },
-                Step::Toggler {
-                    can_continue: false,
-                },
-                // Step::Image {
-                //     height: 200,
-                //     current_fit: ContentFit::Contain,
-                //     slider: slider::State::new(),
+                // Step::Loading{
+                //     value:String::from("1235"),
                 // },
-                Step::Scrollable,
-                Step::TextInput {
-                    value: String::new(),
-                    is_secure: false,
-                    state: text_input::State::new(),
+                // Step::Welcome,
+                Step::Clock{
+                    state: Clock::new(3.3),//{radius: 50.0},
+                    host:String::from("this computer"),
+                    offset:0,
+                    offsetrange:50.,
                 },
-                Step::Debugger,
-                Step::End,
+                // canvas: canvas::Canvas::new(Clock { radius: 50.0 }),
+                // Setp::iteminfo
+                // Step::Slider {
+                //     state: slider::State::new(),
+                //     value: 50,
+                // },
+                // Step::RowsAndColumns {
+                //     layout: Layout::Row,
+                //     spacing_slider: slider::State::new(),
+                //     spacing: 20,
+                // },
+                // Step::Text {
+                //     size_slider: slider::State::new(),
+                //     size: 30,
+                //     color_sliders: [slider::State::new(); 3],
+                //     color: Color::BLACK,
+                // },
+                // Step::Radio { selection: None },
+                // Step::Toggler {
+                //     can_continue: false,
+                // },
+                // // Step::Image {
+                // //     height: 200,
+                // //     current_fit: ContentFit::Contain,
+                // //     slider: slider::State::new(),
+                // // },
+                // Step::Scrollable,
+                // Step::TextInput {
+                //     value: String::new(),
+                //     is_secure: false,
+                //     state: text_input::State::new(),
+                // },
+                // Step::Debugger,
+                // Step::End,
             ],
             current: 0,
         }
@@ -267,100 +330,111 @@ enum Step {
         error: Option<String>,
         state_btn_calculate: button::State
     },
-    Welcome,
-    Slider {
-        state: slider::State,
-        value: u8,
+    Loading{
+        value: String,
     },
-    RowsAndColumns {
-        layout: Layout,
-        spacing_slider: slider::State,
-        spacing: u16,
+    Clock{
+        state: Clock,
+        host:String,
+        offset:i64,
+        offsetrange:f32,
+        // canvas: canvas::Canvas<(),Clock>
     },
-    Text {
-        size_slider: slider::State,
-        size: u16,
-        color_sliders: [slider::State; 3],
-        color: Color,
-    },
-    Radio {
-        selection: Option<Language>,
-    },
-    Toggler {
-        can_continue: bool,
-    },
+    // Slider {
+    //     state: slider::State,
+    //     value: u8,
+    // },
+    // RowsAndColumns {
+    //     layout: Layout,
+    //     spacing_slider: slider::State,
+    //     spacing: u16,
+    // },
+    // Text {
+    //     size_slider: slider::State,
+    //     size: u16,
+    //     color_sliders: [slider::State; 3],
+    //     color: Color,
+    // },
+    // Radio {
+    //     selection: Option<Language>,
+    // },
+    // Toggler {
+    //     can_continue: bool,
+    // },
     // Image {
     //     height: u16,
     //     slider: slider::State,
     //     current_fit: ContentFit,
     // },
-    Scrollable,
-    TextInput {
-        value: String,
-        is_secure: bool,
-        state: text_input::State,
-    },
-    Debugger,
-    End,
+    // Scrollable,
+    // TextInput {
+    //     value: String,
+    //     is_secure: bool,
+    //     state: text_input::State,
+    // },
+    // Debugger,
+    // End,
 }
 
 #[derive(Debug, Clone)]
 pub enum StepMessage {
-    SliderChanged(u8),
-    LayoutChanged(Layout),
-    SpacingChanged(u16),
-    TextSizeChanged(u16),
-    TextColorChanged(Color),
-    LanguageSelected(Language),
+    // SliderChanged(u8),
+    // LayoutChanged(Layout),
+    // SpacingChanged(u16),
+    // TextSizeChanged(u16),
+    // TextColorChanged(Color),
+    // LanguageSelected(Language),
     // ImageHeightChanged(u16),
     // ImageFitSelected(ContentFit),
-    InputChanged(String),
-    ToggleSecureInput(bool),
-    DebugToggled(bool),
-    TogglerChanged(bool),
+    // InputChanged(String),
+    // ToggleSecureInput(bool),
+    // DebugToggled(bool),
+    // TogglerChanged(bool),
     AddressInputChanged(String),
     Calculate,
+    TimerTic,
 
 }
 
 impl<'a> Step {
     fn  update(&mut self, msg: StepMessage, debug: &mut bool) {
+        // let v = canvas::Canvas::new(program);
         match msg {
-            StepMessage::DebugToggled(value) => {
-                if let Step::Debugger = self {
-                    *debug = value;
-                }
-            }
-            StepMessage::LanguageSelected(language) => {
-                if let Step::Radio { selection } = self {
-                    *selection = Some(language);
-                }
-            }
-            StepMessage::SliderChanged(new_value) => {
-                if let Step::Slider { value, .. } = self {
-                    *value = new_value;
-                }
-            }
-            StepMessage::TextSizeChanged(new_size) => {
-                if let Step::Text { size, .. } = self {
-                    *size = new_size;
-                }
-            }
-            StepMessage::TextColorChanged(new_color) => {
-                if let Step::Text { color, .. } = self {
-                    *color = new_color;
-                }
-            }
-            StepMessage::LayoutChanged(new_layout) => {
-                if let Step::RowsAndColumns { layout, .. } = self {
-                    *layout = new_layout;
-                }
-            }
-            StepMessage::SpacingChanged(new_spacing) => {
-                if let Step::RowsAndColumns { spacing, .. } = self {
-                    *spacing = new_spacing;
-                }
-            }
+            // StepMessage::DebugToggled(value) => {
+            //     if let Step::Debugger = self {
+            //         *debug = value;
+            //     }
+            // }
+            // StepMessage::LanguageSelected(language) => {
+            //     if let Step::Radio { selection } = self {
+            //         *selection = Some(language);
+            //     }
+            // }
+            // StepMessage::SliderChanged(new_value) => {
+            //     if let Step::Slider { value, .. } = self {
+            //         *value = new_value;
+            //     }
+            // }
+            // StepMessage::TextSizeChanged(new_size) => {
+            //     if let Step::Text { size, .. } = self {
+            //         *size = new_size;
+            //     }
+            // }
+            // StepMessage::TextColorChanged(new_color) => {
+            //     if let Step::Text { color, .. } = self {
+            //         *color = new_color;
+            //     }
+            // }
+            // StepMessage::LayoutChanged(new_layout) => {
+            //     if let Step::RowsAndColumns { layout, .. } = self {
+            //         *layout = new_layout;
+            //     }
+            // }
+            // StepMessage::SpacingChanged(new_spacing) => {
+            //     if let Step::RowsAndColumns { spacing, .. } = self {
+            //         *spacing = new_spacing;
+            //     }
+            // }
             // StepMessage::ImageHeightChanged(new_height) => {
             //     if let Step::Image { height, .. } = self {
             //         *height = new_height;
@@ -371,31 +445,41 @@ impl<'a> Step {
             //         *current_fit = fit;
             //     }
             // }
-            StepMessage::InputChanged(new_value) => {
-                if let Step::TextInput { value, .. } = self {
-                    *value = new_value;
-                }
-            }
+            // StepMessage::InputChanged(new_value) => {
+            //     if let Step::TextInput { value, .. } = self {
+            //         *value = new_value;
+            //     }
+            // }
             StepMessage::AddressInputChanged(new_value) => {
                 if let Step::SetupAddr { addr_value, .. } = self {
                     *addr_value = new_value;
                     
                 }
             }
-            StepMessage::ToggleSecureInput(toggle) => {
-                if let Step::TextInput { is_secure, .. } = self {
-                    *is_secure = toggle;
-                }
-            }
-            StepMessage::TogglerChanged(value) => {
-                // self ;
-                if let Step::Toggler { can_continue, .. } = self {
-                    *can_continue = value;
-                }
-            }
+            // StepMessage::ToggleSecureInput(toggle) => {
+            //     if let Step::TextInput { is_secure, .. } = self {
+            //         *is_secure = toggle;
+            //     }
+            // }
+            // StepMessage::TogglerChanged(value) => {
+            //     // self ;
+            //     if let Step::Toggler { can_continue, .. } = self {
+            //         *can_continue = value;
+            //     }
+            // }
             StepMessage::Calculate=>{
                 if let Step::SetupAddr { addr_value, .. } = self {
                     // *addr_value = new_value;
+                }
+            },
+            StepMessage::TimerTic=>{
+                if let Step::Clock { .. } = self{
+                    //\
+                    // self.update(msg, debug)
+                    // self.steps[self.current].update(msg, debug);
+
+                    // state.update(event, bounds, cursor);
+                    // state.draw(Rectangle::default(), canvas::Cursor::Unavailable);
                 }
             }
         };
@@ -404,68 +488,75 @@ impl<'a> Step {
     fn title(&self) -> &str {
         match self {
             Step::SetupAddr { .. } => "Setup Address",
-            Step::Welcome => "Welcome",
-            Step::Radio { .. } => "Radio button",
-            Step::Toggler { .. } => "Toggler",
-            Step::Slider { .. } => "Slider",
-            Step::Text { .. } => "Text",
-            // Step::Image { .. } => "Image",
-            Step::RowsAndColumns { .. } => "Rows and columns",
-            Step::Scrollable => "Scrollable",
-            Step::TextInput { .. } => "Text input",
-            Step::Debugger => "Debugger",
-            Step::End => "End",
+            Step::Loading { .. } => "Loading...",
+            Step::Clock { .. } => "clock",
+            // Step::Welcome => "Welcome",
+            // Step::Radio { .. } => "Radio button",
+            // Step::Toggler { .. } => "Toggler",
+            // Step::Slider { .. } => "Slider",
+            // Step::Text { .. } => "Text",
+            // // Step::Image { .. } => "Image",
+            // Step::RowsAndColumns { .. } => "Rows and columns",
+            // Step::Scrollable => "Scrollable",
+            // Step::TextInput { .. } => "Text input",
+            // Step::Debugger => "Debugger",
+            // Step::End => "End",
         }
     }
 
     fn can_continue(&self) -> bool {
         match self {
             Step::SetupAddr { .. } => true,
-            Step::Welcome => true,
-            Step::Radio { selection } => *selection == Some(Language::Rust),
-            Step::Toggler { can_continue } => *can_continue,
-            Step::Slider { .. } => true,
-            Step::Text { .. } => true,
-            // Step::Image { .. } => true,
-            Step::RowsAndColumns { .. } => true,
-            Step::Scrollable => true,
-            Step::TextInput { value, .. } => !value.is_empty(),
-            Step::Debugger => true,
-            Step::End => false,
+            Step::Loading { .. } => true,
+            Step::Clock {..} => false,
+            // Step::Welcome => true,
+            // Step::Radio { selection } => *selection == Some(Language::Rust),
+            // Step::Toggler { can_continue } => *can_continue,
+            // Step::Slider { .. } => true,
+            // Step::Text { .. } => true,
+            // // Step::Image { .. } => true,
+            // Step::RowsAndColumns { .. } => true,
+            // Step::Scrollable => true,
+            // Step::TextInput { value, .. } => !value.is_empty(),
+            // Step::Debugger => true,
+            // Step::End => false,
         }
     }
 
     fn view(&mut self, debug: bool) -> Element<StepMessage> {
         match self {
             Step::SetupAddr {state, addr_value, error, state_btn_calculate} => Self::setupaddr(state, addr_value, &mut *error, state_btn_calculate),
-            Step::Welcome => Self::welcome(),
-            Step::Radio { selection } => Self::radio(*selection),
-            Step::Toggler { can_continue } => Self::toggler(*can_continue),
-            Step::Slider { state, value } => Self::slider(state, *value),
-            Step::Text {
-                size_slider,
-                size,
-                color_sliders,
-                color,
-            } => Self::text(size_slider, *size, color_sliders, *color),
-            // Step::Image {
-            //     height,
-            //     slider,
-            //     current_fit,
-            // } => Self::image(*height, slider, *current_fit),
-            Step::RowsAndColumns {
-                layout,
-                spacing_slider,
-                spacing,
-            } => Self::rows_and_columns(*layout, spacing_slider, *spacing),
-            Step::Scrollable => Self::scrollable(),
-            Step::TextInput {
-                value,
-                is_secure,
-                state,
-            } => Self::text_input(value, *is_secure, state),
-            Step::Debugger => Self::debugger(debug),
-            Step::End => Self::end(),
+            Step::Loading {value} => Self::loading(value),
+            Step::Clock { state, offset, offsetrange, host }  => Self::clock(state, *offset, *offsetrange, host),
+            // Step::Clock { state }  => Self::clock(state),
+            // Step::Welcome => Self::welcome(),
+            // Step::Radio { selection } => Self::radio(*selection),
+            // Step::Toggler { can_continue } => Self::toggler(*can_continue),
+            // Step::Slider { state, value } => Self::slider(state, *value),
+            // Step::Text {
+            //     size_slider,
+            //     size,
+            //     color_sliders,
+            //     color,
+            // } => Self::text(size_slider, *size, color_sliders, *color),
+            // // Step::Image {
+            // //     height,
+            // //     slider,
+            // //     current_fit,
+            // // } => Self::image(*height, slider, *current_fit),
+            // Step::RowsAndColumns {
+            //     layout,
+            //     spacing_slider,
+            //     spacing,
+            // } => Self::rows_and_columns(*layout, spacing_slider, *spacing),
+            // Step::Scrollable => Self::scrollable(),
+            // Step::TextInput {
+            //     value,
+            //     is_secure,
+            //     state,
+            // } => Self::text_input(value, *is_secure, state),
+            // Step::Debugger => Self::debugger(debug),
+            // Step::End => Self::end(),
         }
         .into()
     }
@@ -519,356 +610,395 @@ impl<'a> Step {
             }
     }
 
-    fn welcome() -> Column<'a, StepMessage> {
-        Self::container("Welcome!")
-            .push(Text::new(
-                "This is a simple tour meant to showcase a bunch of widgets \
-                 that can be easily implemented on top of Iced.",
-            ))
-            .push(Text::new(
-                "Iced is a cross-platform GUI library for Rust focused on \
-                 simplicity and type-safety. It is heavily inspired by Elm.",
-            ))
-            .push(Text::new(
-                "It was originally born as part of Coffee, an opinionated \
-                 2D game engine for Rust.",
-            ))
-            .push(Text::new(
-                "On native platforms, Iced provides by default a renderer \
-                 built on top of wgpu, a graphics library supporting Vulkan, \
-                 Metal, DX11, and DX12.",
-            ))
-            .push(Text::new(
-                "Additionally, this tour can also run on WebAssembly thanks \
-                 to dodrio, an experimental VDOM library for Rust.",
-            ))
-            .push(Text::new(
-                "You will need to interact with the UI in order to reach the \
-                 end!",
-            ))
+    fn loading(value: &str)-> Column<'a, StepMessage> {
+        Self::container("").push(
+            Text::new(value.to_string())
+                            .width(Length::Fill)
+                            .horizontal_alignment(alignment::Horizontal::Center),
+        )
+        
     }
 
-    fn slider(
-        state: &'a mut slider::State,
-        value: u8,
-    ) -> Column<'a, StepMessage> {
-        Self::container("Slider")
-            .push(Text::new(
-                "A slider allows you to smoothly select a value from a range \
-                 of values.",
-            ))
-            .push(Text::new(
-                "The following slider lets you choose an integer from \
-                 0 to 100:",
-            ))
-            .push(Slider::new(
-                state,
-                0..=100,
-                value,
-                StepMessage::SliderChanged,
-            ))
-            .push(
-                Text::new(value.to_string())
-                    .width(Length::Fill)
-                    .horizontal_alignment(alignment::Horizontal::Center),
-            )
+    // fn clock(state:Clock) -> Column<'a, StepMessage> {
+    fn clock(state:&'a mut Clock, offset:i64, offsetrange:f32, host:&'a mut String) -> Column<'a, StepMessage> {
+    // fn clock(state:&'a mut Clock) -> Element<StepMessage>  {
+        let con = Self::container("");
+
+        let k:canvas::Canvas<StepMessage, Clock> = canvas::Canvas::new(*state);
+        // k
+        
+        
+        let kk:Element<StepMessage> = k.into();
+        // into();
+
+        // let k = 
+
+        // con
+        con
+        .push(kk)
+        .push(Text::new(format!("{} is {}±{}ms slower then this computer",host,offset, offsetrange)))
     }
 
-    fn rows_and_columns(
-        layout: Layout,
-        spacing_slider: &'a mut slider::State,
-        spacing: u16,
-    ) -> Column<'a, StepMessage> {
-        let row_radio = Radio::new(
-            Layout::Row,
-            "Row",
-            Some(layout),
-            StepMessage::LayoutChanged,
-        );
 
-        let column_radio = Radio::new(
-            Layout::Column,
-            "Column",
-            Some(layout),
-            StepMessage::LayoutChanged,
-        );
+    // fn _clock(state:&'a mut Clock) -> Element<StepMessage> {
+    //     // fn clock(state:&'a mut Clock) -> Element<StepMessage>  {
+    //         // let con = Self::container("");
+    //         let k:canvas::Canvas<StepMessage, Clock> = canvas::Canvas::new(Clock { radius: state.radius });
+            
+    //         let kk = k.into();
+    //         kk
+    //     }
 
-        let layout_section: Element<_> = match layout {
-            Layout::Row => Row::new()
-                .spacing(spacing)
-                .push(row_radio)
-                .push(column_radio)
-                .into(),
-            Layout::Column => Column::new()
-                .spacing(spacing)
-                .push(row_radio)
-                .push(column_radio)
-                .into(),
-        };
+    // fn welcome() -> Column<'a, StepMessage> {
+    //     Self::container("Welcome!")
+    //         .push(Text::new(
+    //             "This is a simple tour meant to showcase a bunch of widgets \
+    //              that can be easily implemented on top of Iced.",
+    //         ))
+    //         .push(Text::new(
+    //             "Iced is a cross-platform GUI library for Rust focused on \
+    //              simplicity and type-safety. It is heavily inspired by Elm.",
+    //         ))
+    //         .push(Text::new(
+    //             "It was originally born as part of Coffee, an opinionated \
+    //              2D game engine for Rust.",
+    //         ))
+    //         .push(Text::new(
+    //             "On native platforms, Iced provides by default a renderer \
+    //              built on top of wgpu, a graphics library supporting Vulkan, \
+    //              Metal, DX11, and DX12.",
+    //         ))
+    //         .push(Text::new(
+    //             "Additionally, this tour can also run on WebAssembly thanks \
+    //              to dodrio, an experimental VDOM library for Rust.",
+    //         ))
+    //         .push(Text::new(
+    //             "You will need to interact with the UI in order to reach the \
+    //              end!",
+    //         ))
+    // }
 
-        let spacing_section = Column::new()
-            .spacing(10)
-            .push(Slider::new(
-                spacing_slider,
-                0..=80,
-                spacing,
-                StepMessage::SpacingChanged,
-            ))
-            .push(
-                Text::new(format!("{} px", spacing))
-                    .width(Length::Fill)
-                    .horizontal_alignment(alignment::Horizontal::Center),
-            );
-
-        Self::container("Rows and columns")
-            .spacing(spacing)
-            .push(Text::new(
-                "Iced uses a layout model based on flexbox to position UI \
-                 elements.",
-            ))
-            .push(Text::new(
-                "Rows and columns can be used to distribute content \
-                 horizontally or vertically, respectively.",
-            ))
-            .push(layout_section)
-            .push(Text::new(
-                "You can also easily change the spacing between elements:",
-            ))
-            .push(spacing_section)
-    }
-
-    fn text(
-        size_slider: &'a mut slider::State,
-        size: u16,
-        color_sliders: &'a mut [slider::State; 3],
-        color: Color,
-    ) -> Column<'a, StepMessage> {
-        let size_section = Column::new()
-            .padding(20)
-            .spacing(20)
-            .push(Text::new("You can change its size:"))
-            .push(Text::new(format!("This text is {} pixels", size)).size(size))
-            .push(Slider::new(
-                size_slider,
-                10..=70,
-                size,
-                StepMessage::TextSizeChanged,
-            ));
-
-        let [red, green, blue] = color_sliders;
-
-        let color_sliders = Row::new()
-            .spacing(10)
-            .push(color_slider(red, color.r, move |r| Color { r, ..color }))
-            .push(color_slider(green, color.g, move |g| Color { g, ..color }))
-            .push(color_slider(blue, color.b, move |b| Color { b, ..color }));
-
-        let color_section = Column::new()
-            .padding(20)
-            .spacing(20)
-            .push(Text::new("And its color:"))
-            .push(Text::new(format!("{:?}", color)).color(color))
-            .push(color_sliders);
-
-        Self::container("Text")
-            .push(Text::new(
-                "Text is probably the most essential widget for your UI. \
-                 It will try to adapt to the dimensions of its container.",
-            ))
-            .push(size_section)
-            .push(color_section)
-    }
-
-    fn radio(selection: Option<Language>) -> Column<'a, StepMessage> {
-        let question = Column::new()
-            .padding(20)
-            .spacing(10)
-            .push(Text::new("Iced is written in...").size(24))
-            .push(Language::all().iter().cloned().fold(
-                Column::new().padding(10).spacing(20),
-                |choices, language| {
-                    choices.push(Radio::new(
-                        language,
-                        language,
-                        selection,
-                        StepMessage::LanguageSelected,
-                    ))
-                },
-            ));
-
-        Self::container("Radio button")
-            .push(Text::new(
-                "A radio button is normally used to represent a choice... \
-                 Surprise test!",
-            ))
-            .push(question)
-            .push(Text::new(
-                "Iced works very well with iterators! The list above is \
-                 basically created by folding a column over the different \
-                 choices, creating a radio button for each one of them!",
-            ))
-    }
-
-    fn toggler(can_continue: bool) -> Column<'a, StepMessage> {
-        Self::container("Toggler")
-            .push(Text::new(
-                "A toggler is mostly used to enable or disable something.",
-            ))
-            .push(
-                Container::new(Toggler::new(
-                    can_continue,
-                    String::from("Toggle me to continue..."),
-                    StepMessage::TogglerChanged,
-                ))
-                .padding([0, 40]),
-            )
-    }
-
-    // fn image(
-    //     height: u16,
-    //     slider: &'a mut slider::State,
-    //     current_fit: ContentFit,
+    // fn slider(
+    //     state: &'a mut slider::State,
+    //     value: u8,
     // ) -> Column<'a, StepMessage> {
-    //     const FIT_MODES: [(ContentFit, &str); 3] = [
-    //         (ContentFit::Contain, "Contain"),
-    //         (ContentFit::Cover, "Cover"),
-    //         (ContentFit::Fill, "Fill"),
-    //     ];
-
-    //     let mode_selector = FIT_MODES.iter().fold(
-    //         Column::new().padding(10).spacing(20),
-    //         |choices, (mode, name)| {
-    //             choices.push(Radio::new(
-    //                 *mode,
-    //                 *name,
-    //                 Some(current_fit),
-    //                 StepMessage::ImageFitSelected,
-    //             ))
-    //         },
-    //     );
-
-    //     Self::container("Image")
-    //         .push(Text::new("Pictures of things in all shapes and sizes!"))
-    //         .push(ferris(height, current_fit))
+    //     Self::container("Slider")
+    //         .push(Text::new(
+    //             "A slider allows you to smoothly select a value from a range \
+    //              of values.",
+    //         ))
+    //         .push(Text::new(
+    //             "The following slider lets you choose an integer from \
+    //              0 to 100:",
+    //         ))
     //         .push(Slider::new(
-    //             slider,
-    //             50..=500,
-    //             height,
-    //             StepMessage::ImageHeightChanged,
+    //             state,
+    //             0..=100,
+    //             value,
+    //             StepMessage::SliderChanged,
     //         ))
     //         .push(
-    //             Text::new(format!("Height: {} px", height))
+    //             Text::new(value.to_string())
     //                 .width(Length::Fill)
     //                 .horizontal_alignment(alignment::Horizontal::Center),
     //         )
-    //         .push(Text::new("Pick a content fit strategy:"))
-    //         .push(mode_selector)
     // }
 
-    fn scrollable() -> Column<'a, StepMessage> {
-        Self::container("Scrollable")
-            .push(Text::new(
-                "Iced supports scrollable content. Try it out! Find the \
-                 button further below.",
-            ))
-            .push(
-                Text::new(
-                    "Tip: You can use the scrollbar to scroll down faster!",
-                )
-                .size(16),
-            )
-            .push(Column::new().height(Length::Units(4096)))
-            .push(
-                Text::new("You are halfway there!")
-                    .width(Length::Fill)
-                    .size(30)
-                    .horizontal_alignment(alignment::Horizontal::Center),
-            )
-            .push(Column::new().height(Length::Units(4096)))
-            // .push(ferris(200, ContentFit::Contain))
-            .push(
-                Text::new("You made it!")
-                    .width(Length::Fill)
-                    .size(50)
-                    .horizontal_alignment(alignment::Horizontal::Center),
-            )
-    }
+    // fn rows_and_columns(
+    //     layout: Layout,
+    //     spacing_slider: &'a mut slider::State,
+    //     spacing: u16,
+    // ) -> Column<'a, StepMessage> {
+    //     let row_radio = Radio::new(
+    //         Layout::Row,
+    //         "Row",
+    //         Some(layout),
+    //         StepMessage::LayoutChanged,
+    //     );
 
-    fn text_input(
-        value: &str,
-        is_secure: bool,
-        state: &'a mut text_input::State,
-    ) -> Column<'a, StepMessage> {
-        let text_input = TextInput::new(
-            state,
-            "Type something to continue...",
-            value,
-            StepMessage::InputChanged,
-        )
-        .padding(10)
-        .size(30);
-        Self::container("Text input")
-            .push(Text::new(
-                "Use a text input to ask for different kinds of information.",
-            ))
-            .push(if is_secure {
-                text_input.password()
-            } else {
-                text_input
-            })
-            .push(Checkbox::new(
-                is_secure,
-                "Enable password mode",
-                StepMessage::ToggleSecureInput,
-            ))
-            .push(Text::new(
-                "A text input produces a message every time it changes. It is \
-                 very easy to keep track of its contents:",
-            ))
-            .push(
-                Text::new(if value.is_empty() {
-                    "You have not typed anything yet..."
-                } else {
-                    value
-                })
-                .width(Length::Fill)
-                .horizontal_alignment(alignment::Horizontal::Center),
-            )
-    }
+    //     let column_radio = Radio::new(
+    //         Layout::Column,
+    //         "Column",
+    //         Some(layout),
+    //         StepMessage::LayoutChanged,
+    //     );
 
-    fn debugger(debug: bool) -> Column<'a, StepMessage> {
-        Self::container("Debugger")
-            .push(Text::new(
-                "You can ask Iced to visually explain the layouting of the \
-                 different elements comprising your UI!",
-            ))
-            .push(Text::new(
-                "Give it a shot! Check the following checkbox to be able to \
-                 see element boundaries.",
-            ))
-            .push(if cfg!(target_arch = "wasm32") {
-                Element::new(
-                    Text::new("Not available on web yet!")
-                        .color([0.7, 0.7, 0.7])
-                        .horizontal_alignment(alignment::Horizontal::Center),
-                )
-            } else {
-                Element::new(Checkbox::new(
-                    debug,
-                    "Explain layout",
-                    StepMessage::DebugToggled,
-                ))
-            })
-            .push(Text::new("Feel free to go back and take a look."))
-    }
+    //     let layout_section: Element<_> = match layout {
+    //         Layout::Row => Row::new()
+    //             .spacing(spacing)
+    //             .push(row_radio)
+    //             .push(column_radio)
+    //             .into(),
+    //         Layout::Column => Column::new()
+    //             .spacing(spacing)
+    //             .push(row_radio)
+    //             .push(column_radio)
+    //             .into(),
+    //     };
 
-    fn end() -> Column<'a, StepMessage> {
-        Self::container("You reached the end!")
-            .push(Text::new(
-                "This tour will be updated as more features are added.",
-            ))
-            .push(Text::new("Make sure to keep an eye on it!"))
-    }
+    //     let spacing_section = Column::new()
+    //         .spacing(10)
+    //         .push(Slider::new(
+    //             spacing_slider,
+    //             0..=80,
+    //             spacing,
+    //             StepMessage::SpacingChanged,
+    //         ))
+    //         .push(
+    //             Text::new(format!("{} px", spacing))
+    //                 .width(Length::Fill)
+    //                 .horizontal_alignment(alignment::Horizontal::Center),
+    //         );
+
+    //     Self::container("Rows and columns")
+    //         .spacing(spacing)
+    //         .push(Text::new(
+    //             "Iced uses a layout model based on flexbox to position UI \
+    //              elements.",
+    //         ))
+    //         .push(Text::new(
+    //             "Rows and columns can be used to distribute content \
+    //              horizontally or vertically, respectively.",
+    //         ))
+    //         .push(layout_section)
+    //         .push(Text::new(
+    //             "You can also easily change the spacing between elements:",
+    //         ))
+    //         .push(spacing_section)
+    // }
+
+    // fn text(
+    //     size_slider: &'a mut slider::State,
+    //     size: u16,
+    //     color_sliders: &'a mut [slider::State; 3],
+    //     color: Color,
+    // ) -> Column<'a, StepMessage> {
+    //     let size_section = Column::new()
+    //         .padding(20)
+    //         .spacing(20)
+    //         .push(Text::new("You can change its size:"))
+    //         .push(Text::new(format!("This text is {} pixels", size)).size(size))
+    //         .push(Slider::new(
+    //             size_slider,
+    //             10..=70,
+    //             size,
+    //             StepMessage::TextSizeChanged,
+    //         ));
+
+    //     let [red, green, blue] = color_sliders;
+
+    //     let color_sliders = Row::new()
+    //         .spacing(10)
+    //         .push(color_slider(red, color.r, move |r| Color { r, ..color }))
+    //         .push(color_slider(green, color.g, move |g| Color { g, ..color }))
+    //         .push(color_slider(blue, color.b, move |b| Color { b, ..color }));
+
+    //     let color_section = Column::new()
+    //         .padding(20)
+    //         .spacing(20)
+    //         .push(Text::new("And its color:"))
+    //         .push(Text::new(format!("{:?}", color)).color(color))
+    //         .push(color_sliders);
+
+    //     Self::container("Text")
+    //         .push(Text::new(
+    //             "Text is probably the most essential widget for your UI. \
+    //              It will try to adapt to the dimensions of its container.",
+    //         ))
+    //         .push(size_section)
+    //         .push(color_section)
+    // }
+
+    // fn radio(selection: Option<Language>) -> Column<'a, StepMessage> {
+    //     let question = Column::new()
+    //         .padding(20)
+    //         .spacing(10)
+    //         .push(Text::new("Iced is written in...").size(24))
+    //         .push(Language::all().iter().cloned().fold(
+    //             Column::new().padding(10).spacing(20),
+    //             |choices, language| {
+    //                 choices.push(Radio::new(
+    //                     language,
+    //                     language,
+    //                     selection,
+    //                     StepMessage::LanguageSelected,
+    //                 ))
+    //             },
+    //         ));
+
+    //     Self::container("Radio button")
+    //         .push(Text::new(
+    //             "A radio button is normally used to represent a choice... \
+    //              Surprise test!",
+    //         ))
+    //         .push(question)
+    //         .push(Text::new(
+    //             "Iced works very well with iterators! The list above is \
+    //              basically created by folding a column over the different \
+    //              choices, creating a radio button for each one of them!",
+    //         ))
+    // }
+
+    // fn toggler(can_continue: bool) -> Column<'a, StepMessage> {
+    //     Self::container("Toggler")
+    //         .push(Text::new(
+    //             "A toggler is mostly used to enable or disable something.",
+    //         ))
+    //         .push(
+    //             Container::new(Toggler::new(
+    //                 can_continue,
+    //                 String::from("Toggle me to continue..."),
+    //                 StepMessage::TogglerChanged,
+    //             ))
+    //             .padding([0, 40]),
+    //         )
+    // }
+
+    // // fn image(
+    // //     height: u16,
+    // //     slider: &'a mut slider::State,
+    // //     current_fit: ContentFit,
+    // // ) -> Column<'a, StepMessage> {
+    // //     const FIT_MODES: [(ContentFit, &str); 3] = [
+    // //         (ContentFit::Contain, "Contain"),
+    // //         (ContentFit::Cover, "Cover"),
+    // //         (ContentFit::Fill, "Fill"),
+    // //     ];
+
+    // //     let mode_selector = FIT_MODES.iter().fold(
+    // //         Column::new().padding(10).spacing(20),
+    // //         |choices, (mode, name)| {
+    // //             choices.push(Radio::new(
+    // //                 *mode,
+    // //                 *name,
+    // //                 Some(current_fit),
+    // //                 StepMessage::ImageFitSelected,
+    // //             ))
+    // //         },
+    // //     );
+
+    // //     Self::container("Image")
+    // //         .push(Text::new("Pictures of things in all shapes and sizes!"))
+    // //         .push(ferris(height, current_fit))
+    // //         .push(Slider::new(
+    // //             slider,
+    // //             50..=500,
+    // //             height,
+    // //             StepMessage::ImageHeightChanged,
+    // //         ))
+    // //         .push(
+    // //             Text::new(format!("Height: {} px", height))
+    // //                 .width(Length::Fill)
+    // //                 .horizontal_alignment(alignment::Horizontal::Center),
+    // //         )
+    // //         .push(Text::new("Pick a content fit strategy:"))
+    // //         .push(mode_selector)
+    // // }
+
+    // fn scrollable() -> Column<'a, StepMessage> {
+    //     Self::container("Scrollable")
+    //         .push(Text::new(
+    //             "Iced supports scrollable content. Try it out! Find the \
+    //              button further below.",
+    //         ))
+    //         .push(
+    //             Text::new(
+    //                 "Tip: You can use the scrollbar to scroll down faster!",
+    //             )
+    //             .size(16),
+    //         )
+    //         .push(Column::new().height(Length::Units(4096)))
+    //         .push(
+    //             Text::new("You are halfway there!")
+    //                 .width(Length::Fill)
+    //                 .size(30)
+    //                 .horizontal_alignment(alignment::Horizontal::Center),
+    //         )
+    //         .push(Column::new().height(Length::Units(4096)))
+    //         // .push(ferris(200, ContentFit::Contain))
+    //         .push(
+    //             Text::new("You made it!")
+    //                 .width(Length::Fill)
+    //                 .size(50)
+    //                 .horizontal_alignment(alignment::Horizontal::Center),
+    //         )
+    // }
+
+    // fn text_input(
+    //     value: &str,
+    //     is_secure: bool,
+    //     state: &'a mut text_input::State,
+    // ) -> Column<'a, StepMessage> {
+    //     let text_input = TextInput::new(
+    //         state,
+    //         "Type something to continue...",
+    //         value,
+    //         StepMessage::InputChanged,
+    //     )
+    //     .padding(10)
+    //     .size(30);
+    //     Self::container("Text input")
+    //         .push(Text::new(
+    //             "Use a text input to ask for different kinds of information.",
+    //         ))
+    //         .push(if is_secure {
+    //             text_input.password()
+    //         } else {
+    //             text_input
+    //         })
+    //         .push(Checkbox::new(
+    //             is_secure,
+    //             "Enable password mode",
+    //             StepMessage::ToggleSecureInput,
+    //         ))
+    //         .push(Text::new(
+    //             "A text input produces a message every time it changes. It is \
+    //              very easy to keep track of its contents:",
+    //         ))
+    //         .push(
+    //             Text::new(if value.is_empty() {
+    //                 "You have not typed anything yet..."
+    //             } else {
+    //                 value
+    //             })
+    //             .width(Length::Fill)
+    //             .horizontal_alignment(alignment::Horizontal::Center),
+    //         )
+    // }
+
+    // fn debugger(debug: bool) -> Column<'a, StepMessage> {
+    //     Self::container("Debugger")
+    //         .push(Text::new(
+    //             "You can ask Iced to visually explain the layouting of the \
+    //              different elements comprising your UI!",
+    //         ))
+    //         .push(Text::new(
+    //             "Give it a shot! Check the following checkbox to be able to \
+    //              see element boundaries.",
+    //         ))
+    //         .push(if cfg!(target_arch = "wasm32") {
+    //             Element::new(
+    //                 Text::new("Not available on web yet!")
+    //                     .color([0.7, 0.7, 0.7])
+    //                     .horizontal_alignment(alignment::Horizontal::Center),
+    //             )
+    //         } else {
+    //             Element::new(Checkbox::new(
+    //                 debug,
+    //                 "Explain layout",
+    //                 StepMessage::DebugToggled,
+    //             ))
+    //         })
+    //         .push(Text::new("Feel free to go back and take a look."))
+    // }
+
+    // fn end() -> Column<'a, StepMessage> {
+    //     Self::container("You reached the end!")
+    //         .push(Text::new(
+    //             "This tour will be updated as more features are added.",
+    //         ))
+    //         .push(Text::new("Make sure to keep an eye on it!"))
+    // }
 }
 
 // fn ferris<'a>(
@@ -905,52 +1035,52 @@ fn button<'a, Message: Clone>(
     .width(Length::Units(100))
 }
 
-fn color_slider(
-    state: &mut slider::State,
-    component: f32,
-    update: impl Fn(f32) -> Color + 'static,
-) -> Slider<f64, StepMessage> {
-    Slider::new(state, 0.0..=1.0, f64::from(component), move |c| {
-        StepMessage::TextColorChanged(update(c as f32))
-    })
-    .step(0.01)
-}
+// fn color_slider(
+//     state: &mut slider::State,
+//     component: f32,
+//     update: impl Fn(f32) -> Color + 'static,
+// ) -> Slider<f64, StepMessage> {
+//     Slider::new(state, 0.0..=1.0, f64::from(component), move |c| {
+//         StepMessage::TextColorChanged(update(c as f32))
+//     })
+//     .step(0.01)
+// }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Language {
-    Rust,
-    Elm,
-    Ruby,
-    Haskell,
-    C,
-    Other,
-}
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// pub enum Language {
+//     Rust,
+//     Elm,
+//     Ruby,
+//     Haskell,
+//     C,
+//     Other,
+// }
 
-impl Language {
-    fn all() -> [Language; 6] {
-        [
-            Language::C,
-            Language::Elm,
-            Language::Ruby,
-            Language::Haskell,
-            Language::Rust,
-            Language::Other,
-        ]
-    }
-}
+// impl Language {
+//     fn all() -> [Language; 6] {
+//         [
+//             Language::C,
+//             Language::Elm,
+//             Language::Ruby,
+//             Language::Haskell,
+//             Language::Rust,
+//             Language::Other,
+//         ]
+//     }
+// }
 
-impl From<Language> for String {
-    fn from(language: Language) -> String {
-        String::from(match language {
-            Language::Rust => "Rust",
-            Language::Elm => "Elm",
-            Language::Ruby => "Ruby",
-            Language::Haskell => "Haskell",
-            Language::C => "C",
-            Language::Other => "Other",
-        })
-    }
-}
+// impl From<Language> for String {
+//     fn from(language: Language) -> String {
+//         String::from(match language {
+//             Language::Rust => "Rust",
+//             Language::Elm => "Elm",
+//             Language::Ruby => "Ruby",
+//             Language::Haskell => "Haskell",
+//             Language::C => "C",
+//             Language::Other => "Other",
+//         })
+//     }
+// }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Layout {
@@ -987,6 +1117,119 @@ mod style {
                 shadow_offset: Vector::new(1.0, 2.0),
                 ..self.active()
             }
+        }
+    }
+}
+
+
+
+
+mod clock{
+
+    use iced::{
+        canvas::{self, Cache, Canvas, Cursor, Frame, Geometry, Path, Text},
+        mouse, Color, Element, Length, Point, Rectangle, Size, Vector, Font,
+    };
+
+    // use super::StepMessage;
+    use chrono::{self, Duration};
+
+    // pub enum Message {
+    //     Populate,
+    // }
+
+    #[derive(Debug, Clone, Copy)]
+    // #[derive(Debug)]
+    pub struct Clock {
+        pub radius: f32,
+        pub loading: bool,
+        pub offset:i64,
+        // tiem_cache:canvas::Cache,
+    }
+
+    impl Clock {
+        // pub fn view<'a>(&'a mut self) -> Element<'a, Message> {
+        //     let c = canvas::Canvas::new(self)
+        //         .width(Length::Fill)
+        //         .height(Length::Fill)
+        //         .into();
+        //     c
+        // }
+        pub fn new(radius:f32) -> Clock{
+            Clock{
+                radius,
+                loading:false,
+                offset:0,
+                // tiem_cache:canvas::Cache::default(),
+            }
+        }
+
+    }
+
+    // Then, we implement the `Program` trait
+    impl<StepMessage> canvas::Program<StepMessage> for Clock {
+        fn draw(&self, bounds: iced::Rectangle, _cursor: canvas::Cursor) -> Vec<canvas::Geometry>{
+            // We prepare a new `Frame`
+
+            let mut frame = canvas::Frame::new(bounds.size());
+
+            match self.loading {
+                true => {
+                    let mut t = Text::default();
+                    t.content = String::from("loading...");
+                    frame.fill_text(t);
+                },
+                false => {
+                    
+                    let now = chrono::offset::Local::now();
+                    match now.checked_add_signed(Duration::milliseconds(self.offset)) {
+                        Some(svtime) => {
+                            let mut date = Text::default();
+                            let mut time = Text::default();
+                            let datestring = svtime.format("%Y-%m-%d").to_string();
+                            let timestring = svtime.format("%H:%M:%S%.3f").to_string();
+                            date.content = datestring;
+                            time.size = 51.;
+                            time.content = timestring;
+                            time.position = Point{x:0.,y:18.};
+                            frame.fill_text(date);
+                            frame.fill_text(time);
+                            
+                        },
+                        None =>{
+                            let mut t = Text::default();
+                            t.content = String::from("error");
+                            frame.fill_text(t);
+                        }
+                    }
+                    
+                }
+            }
+
+            
+
+            
+
+            // We create a `Path` representing a simple circle
+            // let circle = Path::circle(frame.center(), self.radius);
+            // let t = Text{
+            //     content:"A",
+            //     position:Point { x: 10, y: 10 },
+            //     color: Color::BLACK,
+            //     size: 3.3,
+            //     font: iced::Font::Default(),
+            //     horizontal_alignment: Horizontal,
+            //     vertical_alignment: Vertical,
+            // }
+            // chrono::offset::
+            
+
+
+            // And fill it with some color
+            // frame.fill(&circle, Color::BLACK);
+
+            // Finally, we produce the geometry
+            vec![frame.into_geometry()]
         }
     }
 }

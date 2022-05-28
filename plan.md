@@ -45,8 +45,16 @@ println!("Time elapsed in 후처리 is: {:?}", duration);
 - 서버 처리 시점, 2s ~ 3s 사이
 
 - 시간차는 (3s-1.2s) == 1.8s ~ (2s-1.8s)=0.2s 사이!
-- ser + 1 - rev > 서버시각 > ser - sent
-- 서버 시계는 내 시계보다. 1.8 ~ 0.2초 사이로 느리게 간다. (offer 음수값) 
+<!-- - ser + 1 - rev > 서버시각 > ser - sent -->
+<!-- rev - sev - 1 < 서버시각 < sent-sev -->
+
+- sent - sev - 1 < off < rev - sev
+- -1.8 < off < 0.2 이라는 값이 나옴.
+
+- 서버 시계는 내 시계보다. 1.8 ~ 0.2초 사이로 빠르게 간다.
+- 서버 시계는 내 시계보다. off 만큼 느리게 간다.
+
+
 - 내 시계가 서서 시계보다 빠르게 간다.
 - 서버 시계가 내림인지, 반올림인지 모르지 -> node.js 기준 내림!
 
@@ -57,3 +65,11 @@ println!("Time elapsed in 후처리 is: {:?}", duration);
 
 - https://stackoverflow.com/questions/29763647/how-to-make-a-program-that-does-not-display-the-console-window#29764309
 - add `#![windows_subsystem="windows"] ` top of root `.rs`
+
+## 구현
+
+- 비동기 처리? 해야함
+- 로딩창, 시계창 그리기
+
+## 릴리즈
+- `cargo build --release`

@@ -122,8 +122,42 @@ impl DNS {
 
         let len = ((buffer[0] as u16)*256 + (buffer[1] as u16)) as usize;
         
-        if len < 10 {
+        
+        // println!("len: {}",len);
+        // println!("id: {} {}",buffer[2], buffer[3]);
+        // println!("QR: {}",buffer[4]>>7);
+        // println!("OPCODE: {}",(buffer[4]&127)>>3);
+        // println!("AA: {}",(buffer[4]&4)>>2);
+        // println!("TC: {}",(buffer[4]&2)>>1);
+        // println!("RD: {}",(buffer[4]&1));
+        // println!("RA: {}",buffer[5]>>7);
+        // println!("Z: {}",(buffer[5]&127)>>4);
+        // println!("RCODE: {}",(buffer[5]&15));
+        // println!("QDCOUNT: {} {}",buffer[6], buffer[7]);
+        // println!("ANCOUNT: {} {}",buffer[8], buffer[9]);
+        // println!("NSCOUNT: {} {}",buffer[10], buffer[11]);
+        // println!("ARCOUNT: {} {}",buffer[12], buffer[13]);
+        // println!("Q:{:?}",&buffer[14..cnt]);
+
+        if len<cnt {
+            println!("len too sort");
+            return Err("len too sort");
+        }
+
+
+        println!("QDCO: {:?}", &buffer[cnt..len]);
+        println!("Name: {} {}", buffer[cnt], buffer[cnt+1]);
+        println!("Type: {} {}", buffer[cnt+2], buffer[cnt+3]);
+        println!("Class: {} {}", buffer[cnt+4], buffer[cnt+5]);
+        println!("TTL: {} {} {} {}", buffer[cnt+6], buffer[cnt+7], buffer[cnt+8] , buffer[cnt+9]);
+        println!("Len: {} {}", buffer[cnt+10], buffer[cnt+11]);
+
+        
+        
+        if len < 13 {
             Err("no size")
+        }else if (buffer[cnt+2], buffer[cnt+3]) != (0, 1) && (buffer[cnt+2], buffer[cnt+3]) != (0, 5){
+            Err("no exist site")
         }else{
             Ok(Ipv4Addr::new(buffer[len-2], buffer[len-1], buffer[len], buffer[len+1]))
         }
