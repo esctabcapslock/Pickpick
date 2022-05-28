@@ -1,11 +1,20 @@
+// #![windows_subsystem="windows"] 
+
 use iced::{
     alignment, button, scrollable, slider, text_input, Button, Checkbox, Color,
     Column, Container, ContentFit, Element, Length, Radio, Row, Sandbox,
     Scrollable, Settings, Slider, Space, Text, TextInput, Toggler,
 };
 
+use pickpick::{Servertime,ServertimeWait};
+
+
 pub fn main() -> iced::Result {
-    Tour::run(Settings::default())
+    println!("j");
+    let mut setting = Settings::default();
+    setting.window.always_on_top = true;
+    setting.window.size = (300,300); //width and height
+    Tour::run(setting)
 }
 
 pub struct Tour {
@@ -14,6 +23,7 @@ pub struct Tour {
     back_button: button::State,
     next_button: button::State,
     debug: bool,
+    servertime:ServertimeWait,
 }
 
 impl Sandbox for Tour {
@@ -26,6 +36,7 @@ impl Sandbox for Tour {
             back_button: button::State::new(),
             next_button: button::State::new(),
             debug: false,
+            servertime: ServertimeWait::new(),
         }
     }
 
@@ -42,6 +53,57 @@ impl Sandbox for Tour {
                 self.steps.advance();
             }
             Message::StepMessage(step_msg) => {
+                match step_msg {
+                    StepMessage::Calculate =>{
+                        self.steps.advance();
+                        match self.servertime.set_server() {
+                            Ok(_) => {
+                                println!("[GUI] set_server ok");
+                                
+                            }
+                            Err(_) => {
+                                let k = &mut self.steps.steps[self.steps.current];
+
+                                match k {
+                                     Step::SetupAddr { error, ..} =>{
+                                        // error.map(|_| "Error".to_string());
+                                        error.replace("set_server error".to_string());
+                                    },
+                                    _ => {}
+                                }
+                            }
+                        }  
+                    },
+                    StepMessage::AddressInputChanged(ref inputvalue) =>{
+                        let value = inputvalue.clone();
+                        println!("fff {}",value);
+                        let k = &mut self.steps.steps[self.steps.current];
+
+                        match self.servertime.add_address(value) {
+                            Ok(())=>{
+                                println!("[GIT] no error");
+                                match k {
+                                    Step::SetupAddr { error, ..} =>{
+                                       // error.map(|_| "Error".to_string());
+                                        error.take();
+                                   },
+                                   _ => {}
+                               }
+                                
+                            }
+                            Err(_) =>{
+                                match k {
+                                     Step::SetupAddr { error, ..} =>{
+                                        // error.map(|_| "Error".to_string());
+                                        error.replace("Invalid URL".to_string());
+                                    },
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }   
                 self.steps.update(step_msg, &mut self.debug);
             }
         }
@@ -58,23 +120,25 @@ impl Sandbox for Tour {
 
         let mut controls = Row::new();
 
-        if steps.has_previous() {
-            controls = controls.push(
-                button(back_button, "Back")
-                    .on_press(Message::BackPressed)
-                    .style(style::Button::Secondary),
-            );
-        }
+        // 뒤쪽 버튼
+        // if steps.has_previous() {
+        //     controls = controls.push(
+        //         button(back_button, "Back")
+        //             .on_press(Message::BackPressed)
+        //             .style(style::Button::Secondary),
+        //     );
+        // }
 
         controls = controls.push(Space::with_width(Length::Fill));
 
-        if steps.can_continue() {
-            controls = controls.push(
-                button(next_button, "Next")
-                    .on_press(Message::NextPressed)
-                    .style(style::Button::Primary),
-            );
-        }
+        // 다음 버튼
+        // if steps.can_continue() {
+        //     controls = controls.push(
+        //         button(next_button, "Next")
+        //             .on_press(Message::NextPressed)
+        //             .style(style::Button::Primary),
+        //     );
+        // }
 
         let content: Element<_> = Column::new()
             .max_width(540)
@@ -105,6 +169,7 @@ pub enum Message {
     BackPressed,
     NextPressed,
     StepMessage(StepMessage),
+    // Calculate,
 }
 
 struct Steps {
@@ -116,7 +181,14 @@ impl Steps {
     fn new() -> Steps {
         Steps {
             steps: vec![
+                Step::SetupAddr{
+                    addr_value: String::new(),
+                    state: text_input::State::new(),
+                    error:None,
+                    state_btn_calculate: button::State::new(),
+                },
                 Step::Welcome,
+                // Setp::iteminfo
                 Step::Slider {
                     state: slider::State::new(),
                     value: 50,
@@ -189,6 +261,12 @@ impl Steps {
 }
 
 enum Step {
+    SetupAddr{
+        addr_value: String,
+        state: text_input::State,
+        error: Option<String>,
+        state_btn_calculate: button::State
+    },
     Welcome,
     Slider {
         state: slider::State,
@@ -240,10 +318,13 @@ pub enum StepMessage {
     ToggleSecureInput(bool),
     DebugToggled(bool),
     TogglerChanged(bool),
+    AddressInputChanged(String),
+    Calculate,
+
 }
 
 impl<'a> Step {
-    fn update(&mut self, msg: StepMessage, debug: &mut bool) {
+    fn  update(&mut self, msg: StepMessage, debug: &mut bool) {
         match msg {
             StepMessage::DebugToggled(value) => {
                 if let Step::Debugger = self {
@@ -295,14 +376,26 @@ impl<'a> Step {
                     *value = new_value;
                 }
             }
+            StepMessage::AddressInputChanged(new_value) => {
+                if let Step::SetupAddr { addr_value, .. } = self {
+                    *addr_value = new_value;
+                    
+                }
+            }
             StepMessage::ToggleSecureInput(toggle) => {
                 if let Step::TextInput { is_secure, .. } = self {
                     *is_secure = toggle;
                 }
             }
             StepMessage::TogglerChanged(value) => {
+                // self ;
                 if let Step::Toggler { can_continue, .. } = self {
                     *can_continue = value;
+                }
+            }
+            StepMessage::Calculate=>{
+                if let Step::SetupAddr { addr_value, .. } = self {
+                    // *addr_value = new_value;
                 }
             }
         };
@@ -310,6 +403,7 @@ impl<'a> Step {
 
     fn title(&self) -> &str {
         match self {
+            Step::SetupAddr { .. } => "Setup Address",
             Step::Welcome => "Welcome",
             Step::Radio { .. } => "Radio button",
             Step::Toggler { .. } => "Toggler",
@@ -326,6 +420,7 @@ impl<'a> Step {
 
     fn can_continue(&self) -> bool {
         match self {
+            Step::SetupAddr { .. } => true,
             Step::Welcome => true,
             Step::Radio { selection } => *selection == Some(Language::Rust),
             Step::Toggler { can_continue } => *can_continue,
@@ -342,6 +437,7 @@ impl<'a> Step {
 
     fn view(&mut self, debug: bool) -> Element<StepMessage> {
         match self {
+            Step::SetupAddr {state, addr_value, error, state_btn_calculate} => Self::setupaddr(state, addr_value, &mut *error, state_btn_calculate),
             Step::Welcome => Self::welcome(),
             Step::Radio { selection } => Self::radio(*selection),
             Step::Toggler { can_continue } => Self::toggler(*can_continue),
@@ -376,6 +472,51 @@ impl<'a> Step {
 
     fn container(title: &str) -> Column<'a, StepMessage> {
         Column::new().spacing(20).push(Text::new(title).size(50))
+    }
+
+    fn setupaddr(state: &'a mut text_input::State, value: &str, error:&'a mut Option<String>, state_btn_calculate: &'a mut button::State) -> Column<'a, StepMessage> {
+        let text_input = TextInput::new(
+            state,
+            "ex) github.com",
+            value,
+            StepMessage::AddressInputChanged,
+        )
+        .padding(10)
+        .size(30);
+
+        let button = button(state_btn_calculate, "Calculate")
+        .on_press(StepMessage::Calculate)
+        .style(style::Button::Primary);
+
+        // let content: Element<Message> = Column::new();
+
+        let container = Self::container("")
+            .push(Text::new(
+                "Enter the address of the site where you want to time",
+            ))
+            .push(
+                text_input
+            );
+            // .push(Text::new(
+            //     "A text input produces a message every time it changes. It is \
+            //      very easy to keep track of its contents:",
+            // ))
+            match error {
+                None => {
+                    container.push(
+                        button
+                        
+                    )
+                    // container
+                },
+                Some(str) => {
+                    container.push(
+                        Text::new(str.to_string())
+                            .width(Length::Fill)
+                            .horizontal_alignment(alignment::Horizontal::Center),
+                    )
+                }
+            }
     }
 
     fn welcome() -> Column<'a, StepMessage> {

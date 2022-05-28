@@ -1,10 +1,13 @@
+// use std::borrow::Borrow;
 use std::io::prelude::*;
 // use chrono::prelude::*;
-use std::net::{TcpStream,SocketAddr};
+use std::net::{TcpStream,SocketAddr,SocketAddrV4,Ipv4Addr,IpAddr}; //
 
-mod reqtime;
+// mod reqtime;
 pub mod dns;
+pub mod reqtime;
 use reqtime::Reqtime;
+use dns::DNS;
 // use std::time::{Instant};
 
 use chrono::{DateTime,Utc};
@@ -42,18 +45,17 @@ fn find<'a>(buffer:&'a[u8;1024], word:&'a Vec<&Vec<u8>>, s:usize) -> Result<usiz
 }
 
 
-type offset = (i64,i64);
+type Offset = (i64,i64);
 
-pub struct Servertime<'a>{
-    offset:Option<offset>,
-    addr:&'a SocketAddr,
-    host:&'a str,
+pub struct Servertime{
+    pub offset:Option<Offset>,
+    pub addr:SocketAddr,
+    pub host:String,
     delay:Vec<u64>
-
 }
 
-impl <'a> Servertime<'a>  {
-    pub fn new(addr:&'a SocketAddr, host:&'a str) -> Servertime<'a> {
+impl Servertime {
+    pub fn new(addr:SocketAddr, host:String) -> Servertime{
         Servertime{
             addr,
             host,
@@ -86,7 +88,7 @@ impl <'a> Servertime<'a>  {
         Ok(myreqtime)
     } // the stream is closed here
 
-    fn update_offset(&mut self, myreqtimerange:offset){
+    fn update_offset(&mut self, myreqtimerange:Offset){
         let (s,e) = myreqtimerange;
         let delay = (s-e + 1000) as u64;
         self.delay.push(delay);
@@ -104,7 +106,7 @@ impl <'a> Servertime<'a>  {
         }
     }
 
-    pub fn calculate(&mut self) -> Result<offset,&str>{
+    pub fn calculate(&mut self) -> Result<Offset,&str>{
 
         
         let range = self.gettime().expect("can not make").get_offset_range();
@@ -122,8 +124,8 @@ impl <'a> Servertime<'a>  {
         // do_at_millisec(300,|| {} );
 
         // 1/3으로 범위 좁히기.
-        self.calculate_1_3();
-        self.calculate_1_3();
+        self.calculate_1_3().unwrap();
+        self.calculate_1_3().unwrap();
 
         if let Some(offset) = self.offset{
             return Ok(offset);
@@ -138,8 +140,8 @@ impl <'a> Servertime<'a>  {
             let delay = self.get_delay_median() as i64;
             println!("delay {}",delay);
 
-            let (mut s, mut e) = offset;
-            s -= delay;
+            let ( s, e) = offset;
+            let s = s - delay;
 
             let q1 = ((s*2 + e)/3) as u64;
             do_at_millisec(q1);
@@ -175,3 +177,115 @@ fn do_at_millisec(mut milli:u64)
     println!("success??? {}, {}",milli, Utc::now().timestamp_subsec_millis());
     // f();
 }
+
+
+
+// 기다리기
+
+pub struct ServertimeWait{
+    servertime:Option<Servertime>,
+    addr:Option<(Box<SocketAddr>, String)>,
+    re_url:Regex,
+    dns:DNS,
+}
+
+use regex::Regex;
+// const Re:Regex = Regex::new("/^https?:(\\/\\/)?([^/]+)/").unwrap();
+
+impl ServertimeWait{
+    pub fn new() -> ServertimeWait {
+        ServertimeWait{
+            servertime: None,
+            addr: None,
+            re_url:Regex::new("^(https?:)?(//)?([^/]+)").unwrap(),
+            dns:DNS::new(IpAddr::V4(Ipv4Addr::new(1,1,1,1))),
+        }
+    }
+    
+
+    pub fn add_address(&mut self,address:String) -> Result<(),String>{
+        // let re_ip = Regex::new("^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\\:(\\d{1,5}))$").unwrap();
+        // if re_ip.is_match(address){
+        //     self.addr = Some(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(),)))
+        // }
+        match address.parse::<SocketAddrV4>(){
+            Ok(addr) => {
+                let k  = (Box::new(SocketAddr::V4(addr)), "localhost".to_string());
+                self.addr = Some(k);
+                // let s = Servertime::new(SocketAddr::V4(addr), "localhost".to_string());
+                return Ok(());
+            }
+            Err(_) =>{
+                println!("this is not ip address");
+            }
+        }
+
+        println!("eded");
+
+        let capture = match self.re_url.captures(&address){
+            Some(cp) => {cp},
+            None => {
+                println!("regexp not match");
+                return Err(String::from("regexp not match"));
+            }
+        };
+
+        // println!("{:?}",capture);
+
+        let host = match capture.get(3){
+            Some(cp) => {cp.as_str()},
+            None => {
+                println!("regexp error");
+                return Err(String::from("regexp error"));
+            }
+        };
+        
+
+        let ip = match self.dns.get(&host.to_string()){
+            Ok(ip) => {ip},
+            Err(_) =>{
+                println!("3eded");
+                return Err(String::from("not exist site (no dns answer)"));
+            } 
+        };
+
+        println!("all, dns answer: {:?}",ip);
+        
+        self.addr = Some((Box::new(SocketAddr::V4(SocketAddrV4::new(ip,80))), host.to_string()));
+        // let sv = Servertime::new(addr, host);
+        Ok(())
+
+    }
+
+
+    pub fn set_server(&mut self)  -> Result<(), ()>{
+        if let Some((addr, host)) = self.addr.take() {
+            let mut s = Servertime::new(*addr, host);
+            s.calculate();
+            self.servertime = Some(s);
+            return Ok(());
+        }
+        return Err(())
+    }
+
+    // pub fn cal(&mut self) {
+    //     match &self.servertime {
+    //         Some(mut sv) => {
+    //             sv.calculate();
+    //         }
+    //         _ => {}
+    //     }
+    // }
+
+    // pub fn reset(&mut self){
+    //     // self.addr = None;
+    //     self.get_server()
+    // }
+
+}
+
+
+// pub enum ServertimeWrap {
+//     Wait(ServertimeWait),
+//     Do(Servertime),
+// }

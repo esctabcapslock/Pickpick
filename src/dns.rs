@@ -1,18 +1,10 @@
-use std::net::{UdpSocket,TcpStream,IpAddr,SocketAddr, Ipv4Addr};
+use std::net::{TcpStream,IpAddr,SocketAddr, Ipv4Addr}; //UdpSocket,
 use std::io::prelude::*;
 
-pub struct DNS<'a>{
-    addr:&'a IpAddr,
+pub struct DNS{
+    addr:IpAddr,
 
 }
-
-//>>> a="www.naver.com"
-// [*map(ord,a)]
-// use std::convert::TryInto;
-// fn demo<T, const N: usize>(v: Vec<T>) -> [T; N] {
-//     v.try_into()
-//         .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
-// }
 
 const DNS_BEFORE_HEADER:[u8;14] =  [0,31, //, 길이
     77,77,//id
@@ -22,17 +14,17 @@ const DNS_BEFORE_HEADER:[u8;14] =  [0,31, //, 길이
 
 const DNS_AFTER_HEADER:[u8;4] =  [0,1,0,1,];
 
-impl <'a> DNS <'a> {
-    pub fn new(addr:&'a IpAddr)->DNS<'a>{
+impl DNS {
+    pub fn new(addr: IpAddr)->DNS{
         DNS{
             addr
         }
     }
-    pub fn get(&self, host:&String) -> Ipv4Addr{
+    pub fn get(&self, host:&String) -> Result<Ipv4Addr, &str>{
         
         // println!("[DNS]");
         // let req_header = format!("aa{}",host);
-        let mut host_buffer = host.as_bytes();
+        let host_buffer = host.as_bytes();
         let mut header:[u8;1024] = [0;1024];
 
         
@@ -111,17 +103,30 @@ impl <'a> DNS <'a> {
 
 
 
-        let mut stream = TcpStream::connect(SocketAddr::new(*self.addr,53)).expect("Couldn't connect to the server...");
+        let mut stream = TcpStream::connect(SocketAddr::new(self.addr.clone(),53)).expect("Couldn't connect to the server...");
         // stream.write(String::as_bytes(&req_header)).unwrap();
         // stream.write(&len);
-        stream.write(&header[..cnt]);
+        match stream.write(&header[..cnt]){
+            Ok(_) => {},
+            Err(_) => {return Err("can't recive"); }
+        }
 
         let mut buffer = [0; 256]; //1024 byte. 
-        stream.read(&mut buffer).unwrap();
+        // let f = ;
+        match stream.read(&mut buffer) {
+            Ok(_) => {},
+            Err(_) => {return Err("can't recive"); }
+        };
         // println!("raw_buffer: {:?}",buffer);
         // println!("res: {}", String::from_utf8_lossy(&buffer));
 
         let len = ((buffer[0] as u16)*256 + (buffer[1] as u16)) as usize;
-        Ipv4Addr::new(buffer[len-2], buffer[len-1], buffer[len], buffer[len+1])
+        
+        if len < 10 {
+            Err("no size")
+        }else{
+            Ok(Ipv4Addr::new(buffer[len-2], buffer[len-1], buffer[len], buffer[len+1]))
+        }
+
     }
 }

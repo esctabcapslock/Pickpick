@@ -9,6 +9,9 @@ pub struct Reqtime{
     pub server:DateTime<Utc>,
 }
 
+// #[warn(dead_code)]
+// #[allow(unused_results)]
+#[allow(dead_code)]
 fn printdate(date:&DateTime<Utc>){
     let m = date.timestamp_subsec_millis();
     let s = date.timestamp()&100;
