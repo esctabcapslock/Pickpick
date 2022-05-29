@@ -1325,8 +1325,9 @@ mod clock{
 
                     let c = Path::circle(Point { x: 128., y: 50. }, map((((k%100) as f32)/100.),20.,40.));
                     let c_in = Path::circle(Point { x: 128., y: 50. }, 20.);
-                    frame.fill(&c, Color::from_rgb(0.34, 0.29, 0.99));
+                    // frame.fill(&c, Color::from_rgb(0.34, 0.29, 0.99));
                     // frame.fill(&c, Color::from_rgb(0.11, 0.42, 0.87));
+                    frame.fill(&c, Color::from_rgb( 0.11, 0.42, 0.87 ));
                     frame.fill(&c_in, Color::from_rgb(255., 255., 255.));
                     //[ 89, 74, 255 
                 },
