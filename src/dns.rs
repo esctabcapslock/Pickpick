@@ -1,6 +1,7 @@
 use std::net::{TcpStream,IpAddr,SocketAddr, Ipv4Addr}; //UdpSocket,
 use std::io::prelude::*;
 
+#[derive(Debug)]
 pub struct DNS{
     addr:IpAddr,
 
@@ -103,19 +104,25 @@ impl DNS {
 
 
 
-        let mut stream = TcpStream::connect(SocketAddr::new(self.addr.clone(),53)).expect("Couldn't connect to the server...");
+        let mut stream = match TcpStream::connect(SocketAddr::new(self.addr.clone(),53)){
+            Ok(stream) => stream,
+            Err(err) =>{
+                println!("[dns error] {:?}",err);
+                return Err("Couldn't connect to the DNS\nCheck your Internet connection");
+            }
+        };
         // stream.write(String::as_bytes(&req_header)).unwrap();
         // stream.write(&len);
         match stream.write(&header[..cnt]){
             Ok(_) => {},
-            Err(_) => {return Err("can't recive"); }
+            Err(_) => {return Err("DNS can't write"); }
         }
 
         let mut buffer = [0; 256]; //1024 byte. 
         // let f = ;
         match stream.read(&mut buffer) {
             Ok(_) => {},
-            Err(_) => {return Err("can't recive"); }
+            Err(_) => {return Err("DNS can't read"); }
         };
         // println!("raw_buffer: {:?}",buffer);
         // println!("res: {}", String::from_utf8_lossy(&buffer));
@@ -141,7 +148,7 @@ impl DNS {
 
         if len<cnt {
             println!("len too sort");
-            return Err("len too sort");
+            return Err("not exist site (no dns answer)");
         }
 
 
@@ -155,9 +162,11 @@ impl DNS {
         
         
         if len < 13 {
-            Err("no size")
+            println!("no size");
+            Err("not exist site (no dns answer)")
         }else if (buffer[cnt+2], buffer[cnt+3]) != (0, 1) && (buffer[cnt+2], buffer[cnt+3]) != (0, 5){
-            Err("no exist site")
+            println!("no size");
+            Err("not exist site (no dns answer)")
         }else{
             Ok(Ipv4Addr::new(buffer[len-2], buffer[len-1], buffer[len], buffer[len+1]))
         }

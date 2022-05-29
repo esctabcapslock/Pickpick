@@ -1,10 +1,10 @@
-// #![windows_subsystem="windows"] 
+#![windows_subsystem="windows"] 
 
 use iced::{
     alignment, button, scrollable,  text_input, Button,  Color,
     Column, Container,  Element, Length,  Row, 
     Scrollable, Settings,  Space, Text, TextInput, canvas::{self, },//Program
-    Application, executor, Command, time, Subscription, 
+    Application, executor, Command, time, Subscription, window,
 };
 //slider,ContentFit,Slider, Radio,Sandbox,Checkbox,Toggler,Rectangle,
 
@@ -13,18 +13,32 @@ use pickpick::{ServertimeWait};
 
 use clock::Clock;
 
+mod forsync;
 
-// use std::{thread, sync::{Mutex, Arc}, borrow::BorrowMut};
+mod icon;
+use icon::ICON;
+
+
+// use std::{thread, sync::{Mutex, Arc}, ops::DerefMut};
+// use std::rc::Rc;
+
+
 
 pub fn main() -> iced::Result {
-    // println!("j");
-    let mut setting = Settings::default();
-    setting.window.always_on_top = true;
-    setting.window.size = (300,300); //width and height
-    setting.window.resizable = false;
-    Tour::run(setting)
+    let icon = window::icon::Icon::from_rgba(Vec::from(ICON),100,100).unwrap();
+    Tour::run(Settings{
+        window: window::Settings{
+            always_on_top: true,
+            size: (300,300),
+            resizable: false,
+            icon: Some(icon),
+            ..window::Settings::default()
+        },
+        ..Settings::default()
+    })
 }
 
+#[derive(Debug)]
 pub struct Tour {
     steps: Steps,
     scroll: scrollable::State,
@@ -32,13 +46,15 @@ pub struct Tour {
     // next_button: button::State,
     debug: bool,
     servertime:ServertimeWait,
+    // self_arc:Arc<Mutex<Option<Tour>>>,
     // servertime:Arc<Mutex<ServertimeWait>>,
 }
 
 // impl Tour {
-//     fn setoffset(&self){
+//     fn setoffset(&'static mut self){
 //         let k = self.servertime.get_offset_mean();
 //     }
+
 // }
 
 impl Application for Tour {
@@ -55,23 +71,26 @@ impl Application for Tour {
     // }
 
     fn new(_flags: Self::Flags) -> (Tour,Command<Message>) {
-        (Tour {
+        let mut tour = Tour {
             steps: Steps::new(),
             scroll: scrollable::State::new(),
             // back_button: button::State::new(),
             // next_button: button::State::new(),
             debug: false,
             servertime: ServertimeWait::new(),
-            // servertime: Arc::new(Mutex::new(ServertimeWait::new())),
-        },            
-        Command::none())
+            // self_arc:Arc::new(Mutex::new(None)),
+        };
+        (tour,            
+        Command::none()
+        // Command::perform(forsync::run(), |k| Message::StepMessage(StepMessage::ParseError { msg: String::from("동기화 테스트") })),
+    )
     }
 
     fn title(&self) -> String {
         format!("{} - Pickpick", self.steps.title())
     }
 
-    fn update(&mut self, event: Message) -> Command<Message>{
+    fn update(&mut  self, event: Message) -> Command<Message>{
         match event {
             Message::BackPressed => {
                 self.steps.go_back();
@@ -94,9 +113,64 @@ impl Application for Tour {
                         // let k = Mutex::new(String::from("_"));
                         
                         // servertime
+                        // let kkk = self; //&'static mut Tour
+                        // let kkkk = Arc::new(self);
+                        // let kkkk = Arc::new(self);
+                        // let kkk = kkkk.clone();
+                        // let kkk = self.self_arc.clone();
+                        // let kk = Arc::new(Mutex::new(Box::new(*self)));
+                        // struct Connect;
+                        // // self.subscription(forsync::connect());
+                        
+                        // self.setoffset();
+                        // });
+                        // return Command::none();
+                        
+                        let host = self.servertime.get_host();
+                        self.servertime.set_server();
+
+                        if let Some(mut servertime) = self.servertime.servertime.take(){
+                            
+                            println!("def pree host:{}",host);
+                            // let kkk = kk.clone();
+
+                            return Command::perform(forsync::calculate(servertime,host), |res|
+                            // println!("pref {:?}",res);
+                            match res {
+                                Ok(((s,e),host))=>{
+                                    let offset = (s+e)/2;
+                                    let offsetrange = ((e-s) as f32)/2.;
+                                    println!("def host:{}",host);
+                                    Message::StepMessage(StepMessage::CalculateEnded { offset, offsetrange, host })
+                                },
+                                Err(msg) => {
+                                    Message::StepMessage(StepMessage::ParseError { msg })
+                                }
+                            })
+
+
+                            // let _k = thread::spawn(move ||{
+                            //     let res = k.calculate();
+                            //     println!("{:?}",kkk);
+                            //     // match res {
+                            //     //     Ok((s,e))=>{
+                            //     //         let offset = (s+e)/2;
+                            //     //         let offsetrange = ((e-s) as f32)/2.;
+                            //     //         kkk.update(Message::StepMessage(StepMessage::CalculateEnded { offset, offsetrange, host }));
+                            //     //     },
+                            //     //     Err(_) => {
+                            //     //         kkk.update(Message::StepMessage(StepMessage::ParseError { msg: String::from(format!("error!")) }));
+                            //     //     }
+                            //     // }
+                            // });
+                        }else{
+
+                            self.update(Message::StepMessage(StepMessage::ParseError { msg: String::from(format!("error! l")) }));
+                        }
+                        
+    
                         
                         let setserver_res = self.servertime.set_server();
-                        // .set_server();
                         
                         match setserver_res {
                             Ok(_) => {
@@ -105,12 +179,11 @@ impl Application for Tour {
                                 let host = self.servertime.get_host();
                                 self.steps.update(StepMessage::CalculateEnded { offset, offsetrange, host }, &mut false);
                             }
-                            Err(_) => {
-                                self.update(Message::StepMessage(StepMessage::ParseError { msg: String::from("set_server error") }));
+                            Err(err_str) => {
+                                self.update(Message::StepMessage(StepMessage::ParseError { msg: String::from(format!("error!\n{}",err_str)) }));
                             
                             }
                         }  
-                    // });
                     },
                     StepMessage::AddressInputChanged(ref inputvalue) =>{
                         let value = inputvalue.clone();
@@ -121,7 +194,7 @@ impl Application for Tour {
 
                         match self.servertime.add_address(value) {
                             Ok(())=>{
-                                println!("[GIT] no error");
+                                println!("[GUR] no error");
                                 match k {
                                     Step::SetupAddr { error, ..} =>{
                                        // error.map(|_| "Error".to_string());
@@ -224,8 +297,14 @@ impl Application for Tour {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        time::every(std::time::Duration::from_millis(50))
+        
+        return if self.steps.current != 0 {
+            return time::every(std::time::Duration::from_millis(50))
             .map(|_instant| Message::Tick)
+        }else{
+            println!("subscription");
+            Subscription::none()
+        }
     }
 
 }
@@ -239,6 +318,7 @@ pub enum Message {
     // Calculate,
 }
 
+#[derive(Debug)]
 struct Steps {
     steps: Vec<Step>,
     current: usize,
@@ -338,6 +418,7 @@ impl Steps {
     }
 }
 
+#[derive(Debug)]
 enum Step {
     SetupAddr{
         addr_value: String,
@@ -525,8 +606,12 @@ impl<'a> Step {
         match self {
             Step::SetupAddr { .. } => "Setup",
             // Step::Loading { .. } => "Loading...",
-            Step::Clock { host, .. } => {
-                &host
+            Step::Clock { host, state,.. } => {
+                if state.loading {
+                    "Calculating..."
+                }else{
+                    &host
+                }
             },
             // Step::Welcome => "Welcome",
             // Step::Radio { .. } => "Radio button",
@@ -672,9 +757,14 @@ impl<'a> Step {
         // let k = 
 
         // con
-        con
-        .push(kk)
-        .push(Text::new(format!("{} is {}±{}ms slower then this computer",host,offset, offsetrange)))
+        
+
+        if state.loading {
+            con.push(kk)
+        }
+        else{
+            con.push(kk).push(Text::new(format!("{} is {}±{}ms slower then this computer",host,offset, offsetrange)))
+        }
     }
 
 
@@ -1130,6 +1220,8 @@ mod style {
     use iced::button;
     use iced::{Background, Color, Vector};
 
+    
+
     pub enum Button {
         Primary,
         Secondary,
@@ -1165,12 +1257,14 @@ mod style {
 mod clock{
 
     use iced::{
-        canvas::{self, Text},//Cache, Canvas, Cursor, Frame, Geometry, Path, 
-        Point, // mouse, Color, Element, Length, Rectangle, Size, Vector, Font,
+        canvas::{self, Text, Path,},//Cache, Canvas, Cursor, Frame, Geometry, 
+        Point, Color,Size, // mouse, Color, Element, Length, Rectangle, Vector, Font,
     };
 
     // use super::StepMessage;
     use chrono::{self, Duration};
+
+    
 
     // pub enum Message {
     //     Populate,
@@ -1196,7 +1290,7 @@ mod clock{
         pub fn new(radius:f32) -> Clock{
             Clock{
                 radius,
-                loading:false,
+                loading:true,
                 offset:0,
                 // tiem_cache:canvas::Cache::default(),
             }
@@ -1209,17 +1303,36 @@ mod clock{
         fn draw(&self, bounds: iced::Rectangle, _cursor: canvas::Cursor) -> Vec<canvas::Geometry>{
             // We prepare a new `Frame`
 
-            let mut frame = canvas::Frame::new(bounds.size());
+            // let bound_size = bounds.size();
+            // println!("b_size:{:?}",bound_size);
+
+            let mut frame = canvas::Frame::new(Size{width:200., height:100.});
+
+            let now = chrono::offset::Local::now();
 
             match self.loading {
                 true => {
                     let mut t = Text::default();
                     t.content = String::from("loading...");
                     frame.fill_text(t);
+
+                    let k = now.timestamp_millis()/5;
+                    println!("r:{}",k);
+
+                    fn map(v:f32, a:f32, b:f32) -> f32{
+                        a + v*(b-a)
+                    }
+
+                    let c = Path::circle(Point { x: 128., y: 50. }, map((((k%100) as f32)/100.),20.,40.));
+                    let c_in = Path::circle(Point { x: 128., y: 50. }, 20.);
+                    frame.fill(&c, Color::from_rgb(0.34, 0.29, 0.99));
+                    // frame.fill(&c, Color::from_rgb(0.11, 0.42, 0.87));
+                    frame.fill(&c_in, Color::from_rgb(255., 255., 255.));
+                    //[ 89, 74, 255 
                 },
                 false => {
                     
-                    let now = chrono::offset::Local::now();
+                    
                     match now.checked_add_signed(Duration::milliseconds(self.offset)) {
                         Some(svtime) => {
                             let mut date = Text::default();
