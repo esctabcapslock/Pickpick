@@ -145,12 +145,12 @@ impl DNS {
         }
 
 
-        println!("QDCO: {:?}", &buffer[cnt..len]);
-        println!("Name: {} {}", buffer[cnt], buffer[cnt+1]);
-        println!("Type: {} {}", buffer[cnt+2], buffer[cnt+3]);
-        println!("Class: {} {}", buffer[cnt+4], buffer[cnt+5]);
-        println!("TTL: {} {} {} {}", buffer[cnt+6], buffer[cnt+7], buffer[cnt+8] , buffer[cnt+9]);
-        println!("Len: {} {}", buffer[cnt+10], buffer[cnt+11]);
+        // println!("QDCO: {:?}", &buffer[cnt..len]);
+        // println!("Name: {} {}", buffer[cnt], buffer[cnt+1]);
+        // println!("Type: {} {}", buffer[cnt+2], buffer[cnt+3]);
+        // println!("Class: {} {}", buffer[cnt+4], buffer[cnt+5]);
+        // println!("TTL: {} {} {} {}", buffer[cnt+6], buffer[cnt+7], buffer[cnt+8] , buffer[cnt+9]);
+        // println!("Len: {} {}", buffer[cnt+10], buffer[cnt+11]);
 
         
         

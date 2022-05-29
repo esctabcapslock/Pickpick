@@ -1,17 +1,20 @@
 // #![windows_subsystem="windows"] 
 
 use iced::{
-    alignment, button, scrollable, slider, text_input, Button, Checkbox, Color,
-    Column, Container, ContentFit, Element, Length, Radio, Row, Sandbox,
-    Scrollable, Settings, Slider, Space, Text, TextInput, Toggler,canvas::{self, Program},
-    Application, executor, Command, time, Subscription, Rectangle,
+    alignment, button, scrollable,  text_input, Button,  Color,
+    Column, Container,  Element, Length,  Row, 
+    Scrollable, Settings,  Space, Text, TextInput, canvas::{self, },//Program
+    Application, executor, Command, time, Subscription, 
 };
+//slider,ContentFit,Slider, Radio,Sandbox,Checkbox,Toggler,Rectangle,
 
 // use iced::Canvas;
 use pickpick::{ServertimeWait};
 
 use clock::Clock;
 
+
+use std::{thread, sync::{Mutex, Arc}, borrow::BorrowMut};
 
 pub fn main() -> iced::Result {
     // println!("j");
@@ -29,6 +32,7 @@ pub struct Tour {
     // next_button: button::State,
     debug: bool,
     servertime:ServertimeWait,
+    // servertime:Arc<Mutex<ServertimeWait>>,
 }
 
 // impl Tour {
@@ -58,12 +62,13 @@ impl Application for Tour {
             // next_button: button::State::new(),
             debug: false,
             servertime: ServertimeWait::new(),
+            // servertime: Arc::new(Mutex::new(ServertimeWait::new())),
         },            
         Command::none())
     }
 
     fn title(&self) -> String {
-        format!("{} - Iced", self.steps.title())
+        format!("{} - Pickpick", self.steps.title())
     }
 
     fn update(&mut self, event: Message) -> Command<Message>{
@@ -80,40 +85,39 @@ impl Application for Tour {
                         self.steps.advance();
                         // self.view();
                         // self.update(Message::NextPressed);
-                        let setserver_res =  self.servertime.set_server();
+
+                        // let k = Arc::new(self.servertime);
+                        // let join = thread::spawn(|| {
+
+                        // let servertime = self.servertime.lock().unwrap();
+                        // servertime.
+                        // let k = Mutex::new(String::from("_"));
+                        
+                        // servertime
+                        
+                        let setserver_res = self.servertime.set_server();
+                        // .set_server();
                         
                         match setserver_res {
                             Ok(_) => {
                                 println!("[GUI] set_server ok");
                                 let (offset, offsetrange) = self.servertime.get_offset_mean();
-                                let (ch_of, ch_of_range) = (offset, offsetrange);
-                                let ch_host = self.servertime.get_host();
-                                if let Step::Clock { state, offset, offsetrange, host } =  &mut self.steps.steps[self.steps.current] {
-                                    *offset = ch_of;
-                                    *offsetrange = ch_of_range;
-                                    state.loading = false;
-                                    state.offset = ch_of;
-                                    *host = ch_host;
-                                }
-                                
+                                let host = self.servertime.get_host();
+                                self.steps.update(StepMessage::CalculateEnded { offset, offsetrange, host }, &mut false);
                             }
                             Err(_) => {
-                                let k = &mut self.steps.steps[self.steps.current];
-
-                                match k {
-                                     Step::SetupAddr { error, ..} =>{
-                                        // error.map(|_| "Error".to_string());
-                                        error.replace("set_server error".to_string());
-                                    },
-                                    _ => {}
-                                }
+                                self.update(Message::StepMessage(StepMessage::ParseError { msg: String::from("set_server error") }));
+                            
                             }
                         }  
+                    // });
                     },
                     StepMessage::AddressInputChanged(ref inputvalue) =>{
                         let value = inputvalue.clone();
                         println!("fff {}",value);
                         let k = &mut self.steps.steps[self.steps.current];
+
+                        // let servertime = Arc::clone(&self.servertime).lock().unwrap();
 
                         match self.servertime.add_address(value) {
                             Ok(())=>{
@@ -127,16 +131,27 @@ impl Application for Tour {
                                }
                                 
                             }
-                            Err(_) =>{
+                            Err(msg) =>{
                                 match k {
-                                     Step::SetupAddr { error, ..} =>{
-                                        // error.map(|_| "Error".to_string());
-                                        error.replace("Invalid URL".to_string());
-                                    },
-                                    _ => {}
-                                }
+                                    Step::SetupAddr { error, ..} =>{
+                                       error.replace(msg);//String::from("Invalid URL")
+                                   },
+                                   _ => {}
+                               }
                             }
                         }
+                    }
+                    StepMessage::ParseError{ref msg} =>{
+                        let k = &mut self.steps.steps[0];
+                        match k {
+                                Step::SetupAddr { error, ..} =>{
+                                // error.map(|_| "Error".to_string());
+                                error.replace(String::from(msg));
+                            },
+                            _ => {}
+                        }
+                       // 원점으로 초기화
+                       self.steps.current = 0;
                     }
                     _ => {}
                 }   
@@ -210,7 +225,7 @@ impl Application for Tour {
 
     fn subscription(&self) -> Subscription<Message> {
         time::every(std::time::Duration::from_millis(50))
-            .map(|instant| Message::Tick)
+            .map(|_instant| Message::Tick)
     }
 
 }
@@ -330,9 +345,9 @@ enum Step {
         error: Option<String>,
         state_btn_calculate: button::State
     },
-    Loading{
-        value: String,
-    },
+    // Loading{
+    //     value: String,
+    // },
     Clock{
         state: Clock,
         host:String,
@@ -393,11 +408,19 @@ pub enum StepMessage {
     AddressInputChanged(String),
     Calculate,
     TimerTic,
+    CalculateEnded{
+        offset:i64,
+        offsetrange:f32,
+        host:String,
+    },
+    ParseError{
+        msg:String,
+    },
 
 }
 
 impl<'a> Step {
-    fn  update(&mut self, msg: StepMessage, debug: &mut bool) {
+    fn  update(&mut self, msg: StepMessage, _debug: &mut bool) {
         // let v = canvas::Canvas::new(program);
         match msg {
             // StepMessage::DebugToggled(value) => {
@@ -468,7 +491,7 @@ impl<'a> Step {
             //     }
             // }
             StepMessage::Calculate=>{
-                if let Step::SetupAddr { addr_value, .. } = self {
+                if let Step::SetupAddr { .. } = self {
                     // *addr_value = new_value;
                 }
             },
@@ -481,15 +504,30 @@ impl<'a> Step {
                     // state.update(event, bounds, cursor);
                     // state.draw(Rectangle::default(), canvas::Cursor::Unavailable);
                 }
+            },
+            StepMessage::CalculateEnded { offset, offsetrange, host } => {
+                let (ch_offset, ch_offsetrange, ch_host) = (offset, offsetrange, host);
+                if let Step::Clock { state, offset, offsetrange, host } = self{
+                    state.offset = ch_offset;
+                    state.loading = false;
+                    *offset = ch_offset;
+                    *offsetrange = ch_offsetrange;
+                    *host = ch_host;
+                }
+            },
+            StepMessage::ParseError{..} => {
+
             }
         };
     }
 
     fn title(&self) -> &str {
         match self {
-            Step::SetupAddr { .. } => "Setup Address",
-            Step::Loading { .. } => "Loading...",
-            Step::Clock { .. } => "clock",
+            Step::SetupAddr { .. } => "Setup",
+            // Step::Loading { .. } => "Loading...",
+            Step::Clock { host, .. } => {
+                &host
+            },
             // Step::Welcome => "Welcome",
             // Step::Radio { .. } => "Radio button",
             // Step::Toggler { .. } => "Toggler",
@@ -507,7 +545,7 @@ impl<'a> Step {
     fn can_continue(&self) -> bool {
         match self {
             Step::SetupAddr { .. } => true,
-            Step::Loading { .. } => true,
+            // Step::Loading { .. } => true,
             Step::Clock {..} => false,
             // Step::Welcome => true,
             // Step::Radio { selection } => *selection == Some(Language::Rust),
@@ -523,10 +561,10 @@ impl<'a> Step {
         }
     }
 
-    fn view(&mut self, debug: bool) -> Element<StepMessage> {
+    fn view(&mut self, _debug: bool) -> Element<StepMessage> {
         match self {
             Step::SetupAddr {state, addr_value, error, state_btn_calculate} => Self::setupaddr(state, addr_value, &mut *error, state_btn_calculate),
-            Step::Loading {value} => Self::loading(value),
+            // Step::Loading {value} => Self::loading(value),
             Step::Clock { state, offset, offsetrange, host }  => Self::clock(state, *offset, *offsetrange, host),
             // Step::Clock { state }  => Self::clock(state),
             // Step::Welcome => Self::welcome(),
@@ -610,14 +648,14 @@ impl<'a> Step {
             }
     }
 
-    fn loading(value: &str)-> Column<'a, StepMessage> {
-        Self::container("").push(
-            Text::new(value.to_string())
-                            .width(Length::Fill)
-                            .horizontal_alignment(alignment::Horizontal::Center),
-        )
+    // fn loading(value: &str)-> Column<'a, StepMessage> {
+    //     Self::container("").push(
+    //         Text::new(value.to_string())
+    //                         .width(Length::Fill)
+    //                         .horizontal_alignment(alignment::Horizontal::Center),
+    //     )
         
-    }
+    // }
 
     // fn clock(state:Clock) -> Column<'a, StepMessage> {
     fn clock(state:&'a mut Clock, offset:i64, offsetrange:f32, host:&'a mut String) -> Column<'a, StepMessage> {
@@ -1127,8 +1165,8 @@ mod style {
 mod clock{
 
     use iced::{
-        canvas::{self, Cache, Canvas, Cursor, Frame, Geometry, Path, Text},
-        mouse, Color, Element, Length, Point, Rectangle, Size, Vector, Font,
+        canvas::{self, Text},//Cache, Canvas, Cursor, Frame, Geometry, Path, 
+        Point, // mouse, Color, Element, Length, Rectangle, Size, Vector, Font,
     };
 
     // use super::StepMessage;

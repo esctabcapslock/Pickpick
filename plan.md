@@ -70,6 +70,7 @@ println!("Time elapsed in 후처리 is: {:?}", duration);
 
 - 비동기 처리? 해야함
 - 로딩창, 시계창 그리기
+- 생각보다 이거 gui 용량 많이처먹는데?
 
 ## 릴리즈
 - `cargo build --release`

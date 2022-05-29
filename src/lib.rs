@@ -217,7 +217,7 @@ impl ServertimeWait{
                 return Ok(());
             }
             Err(_) =>{
-                println!("this is not ip address");
+                // println!("this is not ip address");
             }
         }
 
@@ -226,8 +226,8 @@ impl ServertimeWait{
         let capture = match self.re_url.captures(&address){
             Some(cp) => {cp},
             None => {
-                println!("regexp not match");
-                return Err(String::from("regexp not match"));
+                println!("Not in url format");
+                return Err(String::from("Not in url format"));
             }
         };
 
@@ -245,7 +245,7 @@ impl ServertimeWait{
         let ip = match self.dns.get(&host.to_string()){
             Ok(ip) => {ip},
             Err(_) =>{
-                println!("3eded");
+                println!("not exist site (no dns answer)");
                 return Err(String::from("not exist site (no dns answer)"));
             } 
         };
@@ -262,7 +262,10 @@ impl ServertimeWait{
     pub fn set_server(&mut self)  -> Result<(), ()>{
         if let Some((addr, host)) = self.addr.take() {
             let mut s = Servertime::new(*addr, host);
-            s.calculate();
+            if let Err(msg) = s.calculate(){
+                println!("[error] msg:{}",msg);
+                return Err(())
+            }
             self.servertime = Some(s);
             return Ok(());
         }
@@ -286,7 +289,7 @@ impl ServertimeWait{
         // }
     }
     pub fn get_host(&self) -> String{
-        if let Some((a,b)) = &self.addr {
+        if let Some((_,b)) = &self.addr {
             return b.clone();
         }
 
