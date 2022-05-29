@@ -2,7 +2,7 @@
 <img src="./doc/icon.png">
 
 # Pickpick
-> Calculate the exact time of the web server.
+Calculate the exact time of the web server.
 <!-- ![](./doc/test-domain.gif) -->
 
 <img src="./doc/test-domain.gif">
