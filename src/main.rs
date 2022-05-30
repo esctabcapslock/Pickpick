@@ -1334,7 +1334,7 @@ mod clock{
                 false => {
                     
                     
-                    match now.checked_add_signed(Duration::milliseconds(self.offset)) {
+                    match now.checked_add_signed(Duration::milliseconds(-self.offset)) {
                         Some(svtime) => {
                             let mut date = Text::default();
                             let mut time = Text::default();

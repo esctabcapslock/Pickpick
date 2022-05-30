@@ -49,7 +49,7 @@ println!("Time elapsed in 후처리 is: {:?}", duration);
 <!-- rev - sev - 1 < 서버시각 < sent-sev -->
 
 - sent - sev - 1 < off < rev - sev
-- -1.8 < off < 0.2 이라는 값이 나옴.
+- -1.8 < off < -0.2 이라는 값이 나옴.
 
 - 서버 시계는 내 시계보다. 1.8 ~ 0.2초 사이로 빠르게 간다.
 - 서버 시계는 내 시계보다. off 만큼 느리게 간다.
