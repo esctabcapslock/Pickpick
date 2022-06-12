@@ -1,5 +1,5 @@
 <div align="center">
-<img src="./doc/icon.png">
+<img src="./doc/icon_256.png">
 
 # Pickpick
 Calculate the exact time of the web server.

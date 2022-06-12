@@ -691,7 +691,7 @@ impl<'a> Step {
     fn setupaddr(state: &'a mut text_input::State, value: &str, error:&'a mut Option<String>, state_btn_calculate: &'a mut button::State) -> Column<'a, StepMessage> {
         let text_input = TextInput::new(
             state,
-            "ex) github.com",
+            "ex) www.rust-lang.org",
             value,
             StepMessage::AddressInputChanged,
         )
@@ -706,7 +706,7 @@ impl<'a> Step {
 
         let container = Self::container("")
             .push(Text::new(
-                "Enter the address of the site where you want to time",
+                "Enter the website URL you want to get time for",
             ))
             .push(
                 text_input

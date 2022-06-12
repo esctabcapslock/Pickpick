@@ -74,3 +74,8 @@ println!("Time elapsed in 후처리 is: {:?}", duration);
 
 ## 릴리즈
 - `cargo build --release`
+
+## 할일
+- url에 주소 있으면 거기로
+- https 요청
+- 영어 문법 수정
